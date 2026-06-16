@@ -56,7 +56,7 @@ def evolutionary_algorithm(
         children = alpha * parents + (1.0 - alpha) * pairs
         
         # mutacja
-        children = children + mutation_std * jax.random.normal(mutation_key, population_size)
+        children = children + mutation_std * jax.random.normal(mutation_key, children.shape)
         children = jnp.clip(children, domain[0], domain[1])
 
         # selekcja
