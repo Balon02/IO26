@@ -9,7 +9,7 @@ import jax.numpy as jnp
 # tak czy siak działa :)
 
 @jax.jit()
-def cost(dist: jnp.ndarray, route: jnp.ndarray):
+def cost_fn(dist: jnp.ndarray, route: jnp.ndarray):
     roll = jnp.roll(route, -1)
     return jnp.sum(dist[route, roll])
 
@@ -74,7 +74,7 @@ def simulated_annealing(
     key, route_init_key = jax.random.split(jax.random.key(seed), 2)
 
     init_route = jax.random.permutation(route_init_key, jnp.arange(dist.shape[0]))
-    init_cost = cost(dist, init_route)
+    init_cost = cost_fn(dist, init_route)
 
     state = {
         "key": key,
@@ -92,28 +92,28 @@ def simulated_annealing(
         cost = state["cost"]
         temperature = state["temperature"]
 
-        key, operator_switch_key, operator_key, accept_key = jnp.split(key, 4)
+        key, operator_switch_key, operator_key, accept_key = jax.random.split(key, 4)
         
         # wybór operatora
         operator_id = jax.random.randint(operator_switch_key, (), minval=0, maxval=len(operators))
-        operator = jax.lax.switch(operator_id, operators)
+        operator = jax.lax.switch(operator_id, operators, operator_key, route)
 
         # zastosowanie operatora
         candidate_route = operator(operator_key, route)
 
         # ocena
-        candidate_cost = cost(candidate_route)
+        candidate_cost = cost_fn(candidate_route)
         cost_delta = candidate_cost - cost
 
         # wybór sekwencji
         always_accept = cost_delta <= 0
         random_accept = jax.random.uniform(accept_key, ()) < jnp.exp(-cost_delta / temperature)
         accept = always_accept | random_accept
-        route = jax.lax.cond(accept, candidate_route, route)
-        cost = jax.lax.cond(accept, candidate_cost, cost)
+        route = jnp.where(accept, candidate_route, route)
+        cost = jnp.where(accept, candidate_cost, cost)
 
         # zmniejszenie temperatury
-        temperature = jnp.min(temperature * cooling_rate, min_temperature)
+        temperature = jnp.max(temperature * cooling_rate, min_temperature)
 
         state = {
             "key": key,
@@ -126,6 +126,6 @@ def simulated_annealing(
     
     results = [state]
     for i in range(iterations):
-        state = simulated_annealing(state)
+        state = step(state)
         results.append(state)
         print(f'{state} @ {i} iter')
