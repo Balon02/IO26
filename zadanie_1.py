@@ -350,20 +350,18 @@ def build_report(
             frame_stride,
         )
 
-        sections.append(
-            "\n".join(
-                [
-                    f"<section><h2>{html.escape(function_name)}</h2>",
-                    "<h3>2D metrics</h3>",
-                    fig_to_section(metrics_fig, include_plotlyjs),
-                    "<h3>3D population movement: AE</h3>",
-                    fig_to_section(ae_3d_fig, False),
-                    "<h3>3D population movement: DE</h3>",
-                    fig_to_section(de_3d_fig, False),
-                    "</section>",
-                ]
-            )
-        )
+        section_parts = [
+            f"<section><h2>{html.escape(function_name)}</h2>",
+            "<h3>2D metrics</h3>",
+            fig_to_section(metrics_fig, include_plotlyjs),
+            "<h3>3D population movement: AE</h3>",
+            fig_to_section(ae_3d_fig, False),
+            "<h3>3D population movement: DE</h3>",
+            fig_to_section(de_3d_fig, False),
+        ]
+
+        section_parts.append("</section>")
+        sections.append("\n".join(section_parts))
         include_plotlyjs = False
 
     document = f"""<!doctype html>
