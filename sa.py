@@ -80,6 +80,8 @@ def simulated_annealing(
         "key": key,
         "route": init_route,
         "cost": init_cost,
+        "best_route": init_route,
+        "best_cost": init_cost,
         "temperature": initial_temperature
     }
 
@@ -90,19 +92,20 @@ def simulated_annealing(
         key = state["key"]
         route = state["route"]
         cost = state["cost"]
+        best_route = state["best_route"]
+        best_cost = state["best_cost"]
         temperature = state["temperature"]
 
         key, operator_switch_key, operator_key, accept_key = jax.random.split(key, 4)
         
         # wybór operatora
         operator_id = jax.random.randint(operator_switch_key, (), minval=0, maxval=len(operators))
-        operator = jax.lax.switch(operator_id, operators, operator_key, route)
 
         # zastosowanie operatora
-        candidate_route = operator(operator_key, route)
+        candidate_route = jax.lax.switch(operator_id, operators, operator_key, route)
 
         # ocena
-        candidate_cost = cost_fn(candidate_route)
+        candidate_cost = cost_fn(dist, candidate_route)
         cost_delta = candidate_cost - cost
 
         # wybór sekwencji
@@ -112,13 +115,20 @@ def simulated_annealing(
         route = jnp.where(accept, candidate_route, route)
         cost = jnp.where(accept, candidate_cost, cost)
 
+        # aktualizacja najlepszego znalezionego rozwiązania
+        is_record = cost < best_cost
+        best_route = jnp.where(is_record, route, best_route)
+        best_cost = jnp.where(is_record, cost, best_cost)
+
         # zmniejszenie temperatury
-        temperature = jnp.max(temperature * cooling_rate, min_temperature)
+        temperature = jnp.maximum(temperature * cooling_rate, min_temperature)
 
         state = {
             "key": key,
             "route": route,
             "cost": cost,
+            "best_route": best_route,
+            "best_cost": best_cost,
             "temperature": temperature
         }
 
@@ -129,3 +139,5 @@ def simulated_annealing(
         state = step(state)
         results.append(state)
         print(f'{state} @ {i} iter')
+
+    return results
