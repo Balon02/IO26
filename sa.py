@@ -32,12 +32,8 @@ def opt_reversal(key, route: jnp.ndarray):
 @jax.jit()
 def insert_relocate(key, route: jnp.ndarray):
     i, j = jax.random.randint(key, 2, minval = 0, maxval = route.shape[0])
-    k = jnp.arange(route.shape[0])
-    src = k
-    src = src + (jnp.less(i, j) & jnp.greater_equal(k, i) & jnp.less(k, j))
-    src = src - (jnp.greater(i, j) & jnp.greater(k, j) & jnp.less_equal(k, i))
-    src = jnp.where(jnp.equal(k, j), i, src)
-    return route[src], (i, j) # druga przekombinowana implementacja na maskach
+    iless_roll = jnp.roll(route, -i)[1:]
+    return jnp.concatenate([route[j][None], iless_roll, route[i][None]]) # wydaje mi się, że nie trzeba tego odkręcać, bo droga i tak zatacza koło; jnp.roll jest niezauważalny z punktu widzenia algorytmu
 
 @jax.jit()
 def block_move(key, route: jnp.ndarray):
