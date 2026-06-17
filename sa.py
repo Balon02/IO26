@@ -4,8 +4,8 @@ import jax.numpy as jnp
 # jako, że zrobiłem pierwsze zadanie używając jaxa i jako tako miało to sens, to zadanie też zrobiłem w jaxie
 # tutaj nie ma to kompletnie żadnego sensu (moim zdaniem), bo algorytm dużo bardziej polega na ilości iteracji, niż złożoności tego co się w środku każdej dzieje
 # uzysk z xla będzie minimalny (tak przypuszczam), ale jak już sobie postanowiłem, że robię wszystko w jaxie, to robię wszystko w jaxie
-# sporym utrudnieniem jest fakt, że w funkcjach przepuszczonych przez xla (jax.jit) nie można używać dynamicznie krojonych tablic (kształty muszą być statyczne)
-# wynikają z tego takie wynaturzenia, jakie można zobaczyć w moich operatorach zmiany trasy (nadużywanie funkcji roll, masek i sztuczne klejenie map indeksów)
+# sporym utrudnieniem jest fakt, że w funkcjach przepuszczonych przez xla nie można używać dynamicznie krojonych tablic (kształty muszą być statyczne)
+# wynikają z tego takie wynaturzenia, jakie można zobaczyć w moich operatorach zmiany trasy (nadużywanie funkcji roll i where)
 # tak czy siak działa :)
 
 @jax.jit()
@@ -80,16 +80,52 @@ def simulated_annealing(
         "key": key,
         "route": init_route,
         "cost": init_cost,
-        "best_route": init_route,
-        "best_cost": init_cost,
-        "temperature": initial_temperature,
-        "iteration": iterations,
+        "temperature": initial_temperature
     }
+
+    operators = [swap, opt_reversal, insert_relocate, block_move]
 
     @jax.jit()
     def step(state):
         key = state["key"]
         route = state["route"]
         cost = state["cost"]
+        temperature = state["temperature"]
 
+        key, operator_switch_key, operator_key, accept_key = jnp.split(key, 4)
+        
+        # wybór operatora
+        operator_id = jax.random.randint(operator_switch_key, (), minval=0, maxval=len(operators))
+        operator = jax.lax.switch(operator_id, operators)
+
+        # zastosowanie operatora
+        candidate_route = operator(operator_key, route)
+
+        # ocena
+        candidate_cost = cost(candidate_route)
+        cost_delta = candidate_cost - cost
+
+        # wybór sekwencji
+        always_accept = cost_delta <= 0
+        random_accept = jax.random.uniform(accept_key, ()) < jnp.exp(-cost_delta / temperature)
+        accept = always_accept | random_accept
+        route = jax.lax.cond(accept, candidate_route, route)
+        cost = jax.lax.cond(accept, candidate_cost, cost)
+
+        # zmniejszenie temperatury
+        temperature = jnp.min(temperature * cooling_rate, min_temperature)
+
+        state = {
+            "key": key,
+            "route": route,
+            "cost": cost,
+            "temperature": temperature
+        }
+
+        return state
     
+    results = [state]
+    for i in range(iterations):
+        state = simulated_annealing(state)
+        results.append(state)
+        print(f'{state} @ {i} iter')
