@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import html
+import inspect
 from pathlib import Path
 from typing import Callable
 
@@ -45,6 +46,41 @@ OBJECTIVES: dict[str, tuple[Objective, tuple[float, float]]] = {
     "langermann": (langermann, langermann_domain),
     "griewank": (griewank, griewank_domain),
 }
+
+HIGH_DIM = 50
+HIGH_DIM_GENERATION_MULTIPLIER = 3
+
+
+def make_high_dim_objectives(seed: int) -> dict[str, tuple[Objective, tuple[float, float]]]:
+    rng = np.random.default_rng(seed)
+    langermann_c = jnp.asarray(rng.uniform(1.0, 5.0, size=(5,)), dtype=jnp.float32)
+    langermann_a = jnp.asarray(
+        rng.uniform(langermann_domain[0], langermann_domain[1], size=(5, HIGH_DIM)),
+        dtype=jnp.float32,
+    )
+
+    @jax.jit
+    def langermann_50d(xs: jnp.ndarray) -> jnp.ndarray:
+        return langermann(xs, c=langermann_c, A=langermann_a)
+
+    return {
+        "ackley": (ackley, ackley_domain),
+        "michalewicz": (michalewicz, michalewicz_domain),
+        "rastrigin": (rastrigin, rastrigin_domain),
+        "langermann": (langermann_50d, langermann_domain),
+        "griewank": (griewank, griewank_domain),
+    }
+
+
+def default_generations() -> int:
+    ae_default = inspect.signature(evolutionary_algorithm).parameters["generations"].default
+    de_default = inspect.signature(differential_evolution).parameters["generations"].default
+    if ae_default != de_default:
+        raise ValueError(
+            "AE and DE have different default generation counts; choose an explicit "
+            "50D generation count before building the report."
+        )
+    return int(ae_default)
 
 
 def history_to_numpy(results: list[dict]) -> dict[str, np.ndarray]:
@@ -109,16 +145,24 @@ def make_metrics_figure(
         rows=3,
         cols=1,
         shared_xaxes=True,
-        subplot_titles=("Best fitness", "Worst fitness", "Mean fitness"),
+        subplot_titles=(
+            "Najlepsza wartość funkcji celu",
+            "Najgorsza wartość funkcji celu",
+            "Średnia wartość funkcji celu",
+        ),
     )
-    metrics = [("best", "Best"), ("worst", "Worst"), ("mean", "Mean")]
+    metrics = [
+        ("best", "najlepsza"),
+        ("worst", "najgorsza"),
+        ("mean", "średnia"),
+    ]
 
     for row, (metric_key, metric_name) in enumerate(metrics, start=1):
         fig.add_trace(
             go.Scatter(
                 y=ae_history[metric_key],
                 mode="lines",
-                name=f"AE {metric_name}",
+                name=f"AE: {metric_name}",
                 legendgroup="AE",
                 line={"color": "#2563eb"},
                 showlegend=row == 1,
@@ -130,7 +174,7 @@ def make_metrics_figure(
             go.Scatter(
                 y=de_history[metric_key],
                 mode="lines",
-                name=f"DE {metric_name}",
+                name=f"DE: {metric_name}",
                 legendgroup="DE",
                 line={"color": "#dc2626"},
                 showlegend=row == 1,
@@ -140,15 +184,15 @@ def make_metrics_figure(
         )
 
     fig.update_layout(
-        title=f"{function_name}: AE vs DE tracked fitness",
+        title=f"{function_name}: porównanie przebiegu AE i DE",
         height=780,
         margin={"l": 70, "r": 30, "t": 80, "b": 60},
         template="plotly_white",
     )
-    fig.update_xaxes(title_text="Generation", row=3, col=1)
-    fig.update_yaxes(title_text="Fitness", row=1, col=1)
-    fig.update_yaxes(title_text="Fitness", row=2, col=1)
-    fig.update_yaxes(title_text="Fitness", row=3, col=1)
+    fig.update_xaxes(title_text="Pokolenie", row=3, col=1)
+    fig.update_yaxes(title_text="Wartość funkcji celu", row=1, col=1)
+    fig.update_yaxes(title_text="Wartość funkcji celu", row=2, col=1)
+    fig.update_yaxes(title_text="Wartość funkcji celu", row=3, col=1)
     return fig
 
 
@@ -187,7 +231,7 @@ def make_3d_population_figure(
         cmax=high,
         opacity=0.72,
         colorbar={"title": "x2"},
-        name="Objective surface",
+        name="Powierzchnia funkcji celu",
         showscale=True,
     )
     population_trace = go.Scatter3d(
@@ -203,8 +247,8 @@ def make_3d_population_figure(
             "cmax": high,
             "line": {"color": "#111827", "width": 1},
         },
-        name=f"{algorithm_name} population",
-        text=[f"fitness={value:.6g}" for value in first_fitness],
+        name=f"Populacja {algorithm_name}",
+        text=[f"wartość funkcji celu={value:.6g}" for value in first_fitness],
         hovertemplate="x1=%{x:.5g}<br>x2=%{y:.5g}<br>%{text}<extra></extra>",
     )
 
@@ -225,7 +269,7 @@ def make_3d_population_figure(
                         "cmax": high,
                         "line": {"color": "#111827", "width": 1},
                     },
-                    text=[f"fitness={value:.6g}" for value in fitness[generation]],
+                    text=[f"wartość funkcji celu={value:.6g}" for value in fitness[generation]],
                     hovertemplate="x1=%{x:.5g}<br>x2=%{y:.5g}<br>%{text}<extra></extra>",
                 )
             ],
@@ -252,7 +296,7 @@ def make_3d_population_figure(
 
     fig = go.Figure(data=[surface, population_trace], frames=frames)
     fig.update_layout(
-        title=f"{function_name}: {algorithm_name} population movement",
+        title=f"{function_name}: ruch populacji {algorithm_name}",
         height=760,
         template="plotly_white",
         margin={"l": 0, "r": 0, "t": 70, "b": 0},
@@ -270,7 +314,7 @@ def make_3d_population_figure(
                 "y": 0,
                 "buttons": [
                     {
-                        "label": "Play",
+                        "label": "Odtwórz",
                         "method": "animate",
                         "args": [
                             None,
@@ -282,7 +326,7 @@ def make_3d_population_figure(
                         ],
                     },
                     {
-                        "label": "Pause",
+                        "label": "Pauza",
                         "method": "animate",
                         "args": [
                             [None],
@@ -299,7 +343,7 @@ def make_3d_population_figure(
         sliders=[
             {
                 "active": 0,
-                "currentvalue": {"prefix": "Generation: "},
+                "currentvalue": {"prefix": "Pokolenie: "},
                 "pad": {"t": 45},
                 "steps": steps,
             }
@@ -319,6 +363,7 @@ def fig_to_section(fig: go.Figure, include_plotlyjs: bool) -> str:
 def build_report(
     report_path: Path,
     histories: dict[str, dict[str, dict[str, np.ndarray]]],
+    high_dim_histories: dict[str, dict[str, dict[str, np.ndarray]]],
     objectives: dict[str, tuple[Objective, tuple[float, float]]],
     grid_size: int,
     frame_stride: int,
@@ -352,11 +397,11 @@ def build_report(
 
         section_parts = [
             f"<section><h2>{html.escape(function_name)}</h2>",
-            "<h3>2D metrics</h3>",
+            "<h3>Metryki 2D</h3>",
             fig_to_section(metrics_fig, include_plotlyjs),
-            "<h3>3D population movement: AE</h3>",
+            "<h3>Ruch populacji 3D: AE</h3>",
             fig_to_section(ae_3d_fig, False),
-            "<h3>3D population movement: DE</h3>",
+            "<h3>Ruch populacji 3D: DE</h3>",
             fig_to_section(de_3d_fig, False),
         ]
 
@@ -364,12 +409,38 @@ def build_report(
         sections.append("\n".join(section_parts))
         include_plotlyjs = False
 
+    high_dim_parts = [
+        "<section>",
+        "<h2>Porównanie osiągów AE i DE dla 50 wymiarów</h2>",
+        "<p>",
+        "Poniższe wykresy pokazują przebieg najlepszej, najgorszej i średniej "
+        "wartości funkcji celu dla uruchomień w 50 wymiarach. Ta część nie ma "
+        "wizualizacji 3D, bo przestrzeń rozwiązań jest 50-wymiarowa.",
+        "</p>",
+    ]
+    for function_name, algorithm_histories in high_dim_histories.items():
+        metrics_fig = make_metrics_figure(
+            f"{function_name} 50D",
+            algorithm_histories["ae"],
+            algorithm_histories["de"],
+        )
+        high_dim_parts.extend(
+            [
+                f"<h3>{html.escape(function_name)}</h3>",
+                fig_to_section(metrics_fig, include_plotlyjs),
+            ]
+        )
+        include_plotlyjs = False
+
+    high_dim_parts.append("</section>")
+    sections.append("\n".join(high_dim_parts))
+
     document = f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AE/DE optimization report</title>
+  <title>Raport optymalizacji AE/DE</title>
   <style>
     body {{
       margin: 0;
@@ -398,12 +469,13 @@ def build_report(
 </head>
 <body>
   <header>
-    <h1>AE/DE optimization report</h1>
+    <h1>Raport optymalizacji AE/DE</h1>
     <p>
-      Each function is optimized in two dimensions. The 2D plots compare best,
-      worst, and mean fitness for AE and DE. The 3D plots show the objective
-      surface and the full population position per generation. Surface and
-      population colors encode the second input dimension, x2.
+      Każda funkcja jest optymalizowana w dwóch wymiarach. Wykresy 2D
+      porównują najlepszą, najgorszą i średnią wartość funkcji celu dla AE
+      oraz DE. Wykresy 3D pokazują powierzchnię funkcji celu i położenie całej
+      populacji w kolejnych pokoleniach. Kolory powierzchni i populacji kodują
+      drugą zmienną wejściową, x2.
     </p>
   </header>
   {"".join(sections)}
@@ -423,6 +495,7 @@ def run_one_optimizer(
     seed: int,
     log_dir: Path,
     verbose_optimizers: bool,
+    generations: int | None = None,
 ) -> dict[str, np.ndarray]:
     if algorithm_name == "ae":
         runner = evolutionary_algorithm
@@ -431,14 +504,18 @@ def run_one_optimizer(
     else:
         raise ValueError(f"Unknown algorithm: {algorithm_name}")
 
+    kwargs = {"n_dim": n_dim, "seed": seed}
+    if generations is not None:
+        kwargs["generations"] = generations
+
     if verbose_optimizers:
-        results = runner(objective, domain, n_dim=n_dim, seed=seed)
+        results = runner(objective, domain, **kwargs)
     else:
         log_dir.mkdir(parents=True, exist_ok=True)
         log_path = log_dir / f"{function_name}_{algorithm_name}.log"
         with log_path.open("w", encoding="utf-8") as log_file:
             with contextlib.redirect_stdout(log_file):
-                results = runner(objective, domain, n_dim=n_dim, seed=seed)
+                results = runner(objective, domain, **kwargs)
 
     return history_to_numpy(results)
 
@@ -449,36 +526,48 @@ def run_experiments(
     n_dim: int,
     seed: int,
     verbose_optimizers: bool,
+    objectives: dict[str, tuple[Objective, tuple[float, float]]] = OBJECTIVES,
+    run_label: str = "",
+    generations: int | None = None,
 ) -> dict[str, dict[str, dict[str, np.ndarray]]]:
     histories: dict[str, dict[str, dict[str, np.ndarray]]] = {}
 
-    for function_index, (function_name, (objective, domain)) in enumerate(OBJECTIVES.items()):
+    run_prefix = f"{run_label} " if run_label else ""
+    file_prefix = f"{run_label}_" if run_label else ""
+
+    for function_index, (function_name, (objective, domain)) in enumerate(objectives.items()):
         histories[function_name] = {}
         for algorithm_offset, algorithm_name in enumerate(("ae", "de")):
             run_seed = seed + 1000 * function_index + algorithm_offset
-            print(f"Running {algorithm_name.upper()} on {function_name}...")
+            print(f"Running {algorithm_name.upper()} on {run_prefix}{function_name}...")
             history = run_one_optimizer(
                 algorithm_name=algorithm_name,
-                function_name=function_name,
+                function_name=f"{file_prefix}{function_name}",
                 objective=objective,
                 domain=domain,
                 n_dim=n_dim,
                 seed=run_seed,
                 log_dir=log_dir,
                 verbose_optimizers=verbose_optimizers,
+                generations=generations,
             )
-            save_history(run_dir / f"{function_name}_{algorithm_name}.npz", history, domain)
+            save_history(run_dir / f"{file_prefix}{function_name}_{algorithm_name}.npz", history, domain)
             histories[function_name][algorithm_name] = history
 
     return histories
 
 
-def load_histories(run_dir: Path) -> dict[str, dict[str, dict[str, np.ndarray]]]:
+def load_histories(
+    run_dir: Path,
+    objectives: dict[str, tuple[Objective, tuple[float, float]]] = OBJECTIVES,
+    run_label: str = "",
+) -> dict[str, dict[str, dict[str, np.ndarray]]]:
     histories: dict[str, dict[str, dict[str, np.ndarray]]] = {}
-    for function_name in OBJECTIVES:
+    file_prefix = f"{run_label}_" if run_label else ""
+    for function_name in objectives:
         histories[function_name] = {
-            "ae": load_history(run_dir / f"{function_name}_ae.npz"),
-            "de": load_history(run_dir / f"{function_name}_de.npz"),
+            "ae": load_history(run_dir / f"{file_prefix}{function_name}_ae.npz"),
+            "de": load_history(run_dir / f"{file_prefix}{function_name}_de.npz"),
         }
     return histories
 
@@ -503,14 +592,22 @@ def main() -> None:
     args = parse_args()
 
     if args.n_dim != 2:
-        raise ValueError("This report visualizes 2D objective domains, so --n-dim must be 2.")
+        raise ValueError("The main report visualizes 2D objective domains, so --n-dim must be 2.")
     if args.grid_size < 2:
         raise ValueError("--grid-size must be at least 2.")
     if args.frame_stride < 1:
         raise ValueError("--frame-stride must be at least 1.")
 
+    high_dim_objectives = make_high_dim_objectives(args.seed)
+    high_dim_generations = HIGH_DIM_GENERATION_MULTIPLIER * default_generations()
+
     if args.skip_runs:
         histories = load_histories(args.run_dir)
+        high_dim_histories = load_histories(
+            args.run_dir,
+            objectives=high_dim_objectives,
+            run_label=f"{HIGH_DIM}d",
+        )
     else:
         histories = run_experiments(
             run_dir=args.run_dir,
@@ -519,11 +616,22 @@ def main() -> None:
             seed=args.seed,
             verbose_optimizers=args.verbose_optimizers,
         )
+        high_dim_histories = run_experiments(
+            run_dir=args.run_dir,
+            log_dir=args.log_dir,
+            n_dim=HIGH_DIM,
+            seed=args.seed,
+            verbose_optimizers=args.verbose_optimizers,
+            objectives=high_dim_objectives,
+            run_label=f"{HIGH_DIM}d",
+            generations=high_dim_generations,
+        )
 
     print("Building Plotly report...")
     build_report(
         report_path=args.report,
         histories=histories,
+        high_dim_histories=high_dim_histories,
         objectives=OBJECTIVES,
         grid_size=args.grid_size,
         frame_stride=args.frame_stride,
