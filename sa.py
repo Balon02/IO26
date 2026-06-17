@@ -4,7 +4,9 @@ import jax.numpy as jnp
 # jako, że zrobiłem pierwsze zadanie używając jaxa i jako tako miało to sens, to zadanie też zrobiłem w jaxie
 # tutaj nie ma to kompletnie żadnego sensu (moim zdaniem), bo algorytm dużo bardziej polega na ilości iteracji, niż złożoności tego co się w środku każdej dzieje
 # uzysk z xla będzie minimalny (tak przypuszczam), ale jak już sobie postanowiłem, że robię wszystko w jaxie, to robię wszystko w jaxie
-# 
+# sporym utrudnieniem jest fakt, że w funkcjach przepuszczonych przez xla (jax.jit) nie można używać dynamicznie krojonych tablic (kształty muszą być statyczne)
+# wynikają z tego takie wynaturzenia, jakie można zobaczyć w moich operatorach zmiany trasy (nadużywanie funkcji roll, masek i sztuczne klejenie map indeksów)
+# tak czy siak działa :)
 
 @jax.jit()
 def cost(dist: jnp.ndarray, route: jnp.ndarray):
@@ -24,10 +26,13 @@ def opt_reversal(key, route: jnp.ndarray):
     pair = jax.random.choice(key, route.shape[0], shape = (2,), replace=False)
     i = jnp.minimum(pair[0], pair[1])
     j = jnp.maximum(pair[0], pair[1])
-    reversed_route = route[::-1]
-    map = jnp.arange(route.shape[0])
-    apply_mask = (map >= i) & (map <= j)
-    return jnp.where(apply_mask, reversed_route, route)
+    distance = j - i
+    left = route.shape[0] - distance
+    i_aligned = jnp.roll(route, -i)
+    i_reversed = i_aligned[::-1]
+    i_reversed_aligned = jnp.roll(i_reversed, -left)
+    apply_mask = jnp.arange(route.shape[0]) < distance
+    return jnp.where(apply_mask, i_reversed_aligned, i_aligned) # nie odkręcam, bo to nie ma znaczenia dla tsp; to jest cykliczne tak czy siak
 
 @jax.jit()
 def insert_relocate(key, route: jnp.ndarray):
@@ -35,7 +40,7 @@ def insert_relocate(key, route: jnp.ndarray):
     iless_roll = jnp.roll(route, -i)[1:]
     distance = (j - i - 1) % (route.shape[0] - 1)
     j_aligned_roll = jnp.roll(iless_roll, distance)
-    return jnp.concatenate([route[i][None], j_aligned_roll]) # zakładam, że nie trzeba tego odwracać, bo trasa i tak reprezentuje cykl i roll jest dla niej nieistotny
+    return jnp.concatenate([route[i][None], j_aligned_roll]) # tak samo, pomijam odkręcenie do oryginalnego porządku, bo nie ma to znaczenia
 
 @jax.jit()
 def block_move(key, route: jnp.ndarray):
@@ -45,24 +50,18 @@ def block_move(key, route: jnp.ndarray):
     left = route.shape[0] - length
     jump = jax.random.randint(key_jump, (), minval = 1, maxval = left)
 
+    # pomysł jest taki, żeby przekręcić do postaci która zaczyna się od segmentu wybranego do zamiany, potem podzielić to co po nim zostaje na 2 wg. jump i zamienić te 2 końcowe części
     base_idx_map = jnp.arange(route.shape[0])
+    result_idx_map = jnp.roll(base_idx_map, -start) # sekwencja zaczyna się od wybranego bloku do zamiany
+    
+    rest_len = route.shape[0] - length
+    rest_pos = base_idx_map - length
+    shifted_rest_pos = (rest_pos + jump) % rest_len
+    source_pos = length + shifted_rest_pos
 
-    block_aligned_idx_map = jnp.roll(jnp.arange(route.shape[0]), -start) # ciąg w postaci [wylosowany_blok], [reszta]
-    base_mask = base_idx_map <= length
+    source_pos = jnp.where(base_idx_map < length, base_idx_map, source_pos)
 
-    # resztę dzielimy na to co ma wylądować przed i po wg. wylosowanego skoku
-    boundary = route.shape[0] - (length + jump)
-    end_rolled_idx_map = jnp.roll(block_aligned_idx_map, boundary) 
-    suffix_mask = base_idx_map > boundary # segment od końca; sekcja skoku 
-
-    left_aligned_idx_map = jnp.roll(block_aligned_idx_map, -length)
-    prefix_mask = (base_idx_map > length) & (base_idx_map < length + jump) # segment pozostały
-
-    # zamiana 2 bloków reszty
-    swap_idx_map = jnp.where(base_mask, block_aligned_idx_map, end_rolled_idx_map)
-    swap_idx_map = jnp.where(prefix_mask, left_aligned_idx_map, swap_idx_map)
-
-    return route[swap_idx_map]
+    return route[result_idx_map[source_pos]]
 
 def simulated_annealing(
         dist: jnp.ndarray,
