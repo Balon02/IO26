@@ -34,7 +34,7 @@ def differential_evolution(
         key = state["key"]
         population = state["population"]
         fitness = state["fitness"]
-        key, sampling_key, crossover_key, forced_muation_key = jax.random.split(key, 4)
+        key, sampling_key, crossover_key, forced_mutation_key = jax.random.split(key, 4)
 
         key_map = jax.random.split(sampling_key, population_size)
         index_map = jnp.arange(population_size)
@@ -53,12 +53,13 @@ def differential_evolution(
         # selekcja
         crossover_mask = jnp.less(jax.random.uniform(crossover_key, (population_size, n_dim)), crossover_prob) # gdzie wybrać cechę po mutacji / oryginał
         ensure_mutation_mask = jnp.greater(jnp.sum(crossover_mask, axis=1), 0) # część populacji u której żadne mutacje nie przeszły
-        forced_mutation_idxs = jax.random.randint(forced_muation_key, (population_size,), minval = 0, maxval = n_dim) # wylosowanie po 1 indeksie do mutacji 'na wszelki wypadek' dla każdego osobnika
+        forced_mutation_idxs = jax.random.randint(forced_mutation_key, (population_size,), minval = 0, maxval = n_dim) # wylosowanie po 1 indeksie do mutacji 'na wszelki wypadek' dla każdego osobnika
         forced_mutation_mask = jnp.zeros_like(crossover_mask).at[jnp.arange(population_size), forced_mutation_idxs].set(1) # pełna maska tych 'na wszelkich wypadków'
         crossover_mask = jnp.where(ensure_mutation_mask, crossover_mask, forced_mutation_mask) # merge masek z wymuszonym wyborem tylko tam, gdzie jest potrzebny
             # chyba to trochę przekombinowałem, ale w ten sposób odsetek wyboru cech mutant vs oryginał będzie bliższy crossover_prob niż gdybyśmy 'na chama' nałożyli i jedną i drugą maskę
 
         trials = jnp.where(crossover_mask, mutants, population) # nałożenie maski
+        trials = jnp.clip(trials, domain[0], domain[1]) # przycięcie do zakresu wyszukiwania
         trial_fitness = jax.vmap(objective)(trials)
         improved = jnp.less_equal(trial_fitness, fitness)
 
