@@ -33,16 +33,26 @@ def opt_reversal(key, route: jnp.ndarray):
 def insert_relocate(key, route: jnp.ndarray):
     i, j = jax.random.randint(key, 2, minval = 0, maxval = route.shape[0])
     iless_roll = jnp.roll(route, -i)[1:]
-    return jnp.concatenate([route[j][None], iless_roll, route[i][None]]) # wydaje mi się, że nie trzeba tego odkręcać, bo droga i tak zatacza koło; jnp.roll jest niezauważalny z punktu widzenia algorytmu
+    return jnp.concatenate([route[j][None], iless_roll, route[i][None]]) # wydaje mi się, że nie trzeba tego odkręcać, bo droga i tak zatacza koło; jnp.roll powinien być niezauważalny z punktu widzenia algorytmu
 
 @jax.jit()
 def block_move(key, route: jnp.ndarray):
-    # trzecia przekombinowana implementacja na maskach
-    key, k_len, k_start, k_dest = jax.random.split(key, 4)
-    length = jax.random.randint(k_len, (), 1, route.shape[0])
-    start = jax.random.randint(k_start, (), 0, route.shape[0] - length + 1)
+    key_len, key_start, key_jump = jax.random.split(key, 3)
+    length = jax.random.randint(key_len, (), minval=1, maxval=route.shape[0] - 1) # ruch o 1 byłby równoznaczny z brakiem ruchu
+    start = jax.random.randint(key_start, (), minval=0, maxval=route.shape[0] - length + 1)
+    left = route.shape[0] - length
+    jump = jax.random.randint(key_jump, (), minval = 1, maxval = left)
 
+    base_idx_map = jnp.arange(route.shape[0])
 
+    block_aligned_idx_map = jnp.roll(jnp.arange(route.shape[0]), -start) # ciąg w postaci [wylosowany_blok], [reszta]
+    base_mask = jnp.where(base_idx_map <= start, 1, 0)
+
+    # resztę dzielimy na to co ma wylądować przed i po wg. wylosowanego skoku
+    end_rolled_idx_map = jnp.roll(base_idx_map, route.shape[0] - length + jump) # ciąg w postaci [reszta], [segment który ma trafić przed wylosowany ciąg]
+    prefix_mask = jnp.where(base_idx_map <= start)
+
+    start_aligned_idx_map = jnp.roll(base_idx_map, -start) # stąd bierzemy indeksy bloku
 
 def simulated_annealing(
         dist: jnp.ndarray,
