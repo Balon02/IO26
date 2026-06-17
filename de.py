@@ -41,7 +41,10 @@ def differential_evolution(
         
         @jax.vmap
         def get_sampling_pools(key, idx):
-            pool = jax.random.permutation(key, jnp.delete(jnp.arange(population_size), idx))[:3]
+            # pool = jax.random.permutation(key, jnp.delete(jnp.arange(population_size), idx))[:3] # pierwsza wersja, logicznie spójna, ale niepotrzebnie skomplikowana dla xla (jax.jit)
+            scores = jax.random.uniform(key, (population_size,))
+            scores = scores.at[idx].set(jnp.inf)
+            pool = jnp.argsort(scores)[:3] # rozwiązanie v2, dziwne ale w teorii bardziej przyjazna dla xla
             return population[pool]
         
         sampling_pools = get_sampling_pools(key_map, index_map)
@@ -52,7 +55,8 @@ def differential_evolution(
         ensure_mutation_mask = jnp.greater(jnp.sum(crossover_mask, axis=1), 0) # część populacji u której żadne mutacje nie przeszły
         forced_mutation_idxs = jax.random.randint(forced_muation_key, (population_size,), minval = 0, maxval = n_dim) # wylosowanie po 1 indeksie do mutacji 'na wszelki wypadek' dla każdego osobnika
         forced_mutation_mask = jnp.zeros_like(crossover_mask).at[jnp.arange(population_size), forced_mutation_idxs].set(1) # pełna maska tych 'na wszelkich wypadków'
-        crossover_mask = jnp.where(ensure_mutation_mask, crossover_mask, forced_mutation_mask) # merge masek
+        crossover_mask = jnp.where(ensure_mutation_mask, crossover_mask, forced_mutation_mask) # merge masek z wymuszonym wyborem tylko tam, gdzie jest potrzebny
+            # chyba to trochę przekombinowałem, ale w ten sposób odsetek wyboru cech mutant vs oryginał będzie bliższy crossover_prob niż gdybyśmy 'na chama' nałożyli i jedną i drugą maskę
 
         trials = jnp.where(crossover_mask, mutants, population) # nałożenie maski
         trial_fitness = jax.vmap(objective)(trials)
