@@ -8,7 +8,7 @@ def evolutionary_algorithm(
         domain: Tuple[float, float],
         n_dim: int = 2,
         population_size: int = 100,
-        generations: int = 100,
+        generations: int = 3000,
         mutation_std: float = 0.05,
         parent_selection_pool_size: int = 5,
         seed: int = 123
@@ -42,7 +42,7 @@ def evolutionary_algorithm(
         parent_key_map = jax.random.split(parent_key, population_size)
         
         @jax.vmap
-        def get_parent(key): # takie coś wymyśliłem, żeby nie było powtórek w puli kandydatów (chociaż pewnie z powtórkami też by działało, a kod byłby prostszy)
+        def get_parent(key): # takie coś wymyśliłem, żeby nie było powtórek w pulach kandydatów (chociaż pewnie z powtórkami też by działało, a kod byłby prostszy)
             pool = jax.random.permutation(key, population_size)[:parent_selection_pool_size]
             best_idx_pool =  jnp.argmin(fitness[pool])
             best_idx = pool[best_idx_pool]
