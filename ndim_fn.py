@@ -54,6 +54,6 @@ griewank_domain = (-600.0, 600.0)
 # https://www.sfu.ca/~ssurjano/Code/rosenm.html
 @jax.jit()
 def rosenbrock(xs: jnp.ndarray):
-    return jnp.sum(100 * (xs[:-1] - xs[1:] ** 2) ** 2 + (xs[1:] - 1) ** 2)
+    return jnp.sum(100 * (xs[1:] - xs[:-1] ** 2) ** 2 + (xs[:-1] - 1) ** 2)
 
 rosenbrock_domain = (-5.0, 10.0)

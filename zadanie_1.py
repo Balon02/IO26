@@ -24,6 +24,8 @@ from ndim_fn import (
     michalewicz_domain,
     rastrigin,
     rastrigin_domain,
+    rosenbrock,
+    rosenbrock_domain,
 )
 
 try:
@@ -45,31 +47,19 @@ OBJECTIVES: dict[str, tuple[Objective, tuple[float, float]]] = {
     "rastrigin": (rastrigin, rastrigin_domain),
     "langermann": (langermann, langermann_domain),
     "griewank": (griewank, griewank_domain),
+    "rosenbrock": (rosenbrock, rosenbrock_domain),
 }
 
 HIGH_DIM = 50
 HIGH_DIM_GENERATION_MULTIPLIER = 3
 
-
-def make_high_dim_objectives(seed: int) -> dict[str, tuple[Objective, tuple[float, float]]]:
-    rng = np.random.default_rng(seed)
-    langermann_c = jnp.asarray(rng.uniform(1.0, 5.0, size=(5,)), dtype=jnp.float32)
-    langermann_a = jnp.asarray(
-        rng.uniform(langermann_domain[0], langermann_domain[1], size=(5, HIGH_DIM)),
-        dtype=jnp.float32,
-    )
-
-    @jax.jit
-    def langermann_50d(xs: jnp.ndarray) -> jnp.ndarray:
-        return langermann(xs, c=langermann_c, A=langermann_a)
-
-    return {
-        "ackley": (ackley, ackley_domain),
-        "michalewicz": (michalewicz, michalewicz_domain),
-        "rastrigin": (rastrigin, rastrigin_domain),
-        "langermann": (langermann_50d, langermann_domain),
-        "griewank": (griewank, griewank_domain),
-    }
+HIGH_DIM_OBJECTIVES: dict[str, tuple[Objective, tuple[float, float]]] = {
+    "ackley": (ackley, ackley_domain),
+    "michalewicz": (michalewicz, michalewicz_domain),
+    "rastrigin": (rastrigin, rastrigin_domain),
+    "griewank": (griewank, griewank_domain),
+    "rosenbrock": (rosenbrock, rosenbrock_domain),
+}
 
 
 def default_generations() -> int:
@@ -417,6 +407,14 @@ def build_report(
         "wartości funkcji celu dla uruchomień w 50 wymiarach. Ta część nie ma "
         "wizualizacji 3D, bo przestrzeń rozwiązań jest 50-wymiarowa.",
         "</p>",
+        "<p>",
+        "Funkcja Langermanna została pominięta w części 50-wymiarowej. Jej "
+        "kanoniczne stałe w źródle są podane dla przypadku 2D; losowe "
+        "rozszerzenie macierzy A do 50 wymiarów powoduje, że składnik "
+        "wykładniczy zanika prawie wszędzie, a problem staje się praktycznie "
+        "płaski i niemiarodajny. W części 50D zamiast niej dodano funkcję "
+        "Rosenbrocka.",
+        "</p>",
     ]
     for function_name, algorithm_histories in high_dim_histories.items():
         metrics_fig = make_metrics_figure(
@@ -598,14 +596,13 @@ def main() -> None:
     if args.frame_stride < 1:
         raise ValueError("--frame-stride must be at least 1.")
 
-    high_dim_objectives = make_high_dim_objectives(args.seed)
     high_dim_generations = HIGH_DIM_GENERATION_MULTIPLIER * default_generations()
 
     if args.skip_runs:
         histories = load_histories(args.run_dir)
         high_dim_histories = load_histories(
             args.run_dir,
-            objectives=high_dim_objectives,
+            objectives=HIGH_DIM_OBJECTIVES,
             run_label=f"{HIGH_DIM}d",
         )
     else:
@@ -622,7 +619,7 @@ def main() -> None:
             n_dim=HIGH_DIM,
             seed=args.seed,
             verbose_optimizers=args.verbose_optimizers,
-            objectives=high_dim_objectives,
+            objectives=HIGH_DIM_OBJECTIVES,
             run_label=f"{HIGH_DIM}d",
             generations=high_dim_generations,
         )
