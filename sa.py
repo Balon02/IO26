@@ -26,14 +26,16 @@ def opt_reversal(key, route: jnp.ndarray):
     j = jnp.maximum(pair[0], pair[1])
     reversed_route = route[::-1]
     map = jnp.arange(route.shape[0])
-    apply_mask = jnp.where(jnp.greater_equal(map, i) & jnp.less(map, j))
+    apply_mask = (map >= i) & (map <= j)
     return jnp.where(apply_mask, reversed_route, route)
 
 @jax.jit()
 def insert_relocate(key, route: jnp.ndarray):
-    i, j = jax.random.randint(key, 2, minval = 0, maxval = route.shape[0])
+    i, j = jax.random.choice(key, route.shape[0], shape = (2,), replace=False)
     iless_roll = jnp.roll(route, -i)[1:]
-    return jnp.concatenate([route[j][None], iless_roll, route[i][None]]) # wydaje mi się, że nie trzeba tego odkręcać, bo droga i tak zatacza koło; jnp.roll powinien być niezauważalny z punktu widzenia algorytmu
+    distance = (j - i - 1) % (route.shape[0] - 1)
+    j_aligned_roll = jnp.roll(iless_roll, distance)
+    return jnp.concatenate([route[i][None], j_aligned_roll]) # zakładam, że nie trzeba tego odwracać, bo trasa i tak reprezentuje cykl i roll jest dla niej nieistotny
 
 @jax.jit()
 def block_move(key, route: jnp.ndarray):
@@ -46,13 +48,21 @@ def block_move(key, route: jnp.ndarray):
     base_idx_map = jnp.arange(route.shape[0])
 
     block_aligned_idx_map = jnp.roll(jnp.arange(route.shape[0]), -start) # ciąg w postaci [wylosowany_blok], [reszta]
-    base_mask = jnp.where(base_idx_map <= start, 1, 0)
+    base_mask = base_idx_map <= length
 
     # resztę dzielimy na to co ma wylądować przed i po wg. wylosowanego skoku
-    end_rolled_idx_map = jnp.roll(base_idx_map, route.shape[0] - length + jump) # ciąg w postaci [reszta], [segment który ma trafić przed wylosowany ciąg]
-    prefix_mask = jnp.where(base_idx_map <= start)
+    boundary = route.shape[0] - (length + jump)
+    end_rolled_idx_map = jnp.roll(block_aligned_idx_map, boundary) 
+    suffix_mask = base_idx_map > boundary # segment od końca; sekcja skoku 
 
-    start_aligned_idx_map = jnp.roll(base_idx_map, -start) # stąd bierzemy indeksy bloku
+    left_aligned_idx_map = jnp.roll(block_aligned_idx_map, -length)
+    prefix_mask = (base_idx_map > length) & (base_idx_map < length + jump) # segment pozostały
+
+    # zamiana 2 bloków reszty
+    swap_idx_map = jnp.where(base_mask, block_aligned_idx_map, end_rolled_idx_map)
+    swap_idx_map = jnp.where(prefix_mask, left_aligned_idx_map, swap_idx_map)
+
+    return route[swap_idx_map]
 
 def simulated_annealing(
         dist: jnp.ndarray,
@@ -83,4 +93,4 @@ def simulated_annealing(
         route = state["route"]
         cost = state["cost"]
 
-
+    
