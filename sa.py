@@ -4,7 +4,7 @@ import jax.numpy as jnp
 # jako, że zrobiłem pierwsze zadanie używając jaxa i jako tako miało to sens, to zadanie też zrobiłem w jaxie
 # tutaj nie ma to kompletnie żadnego sensu (moim zdaniem), bo algorytm dużo bardziej polega na ilości iteracji, niż złożoności tego co się w środku każdej dzieje
 # uzysk z xla będzie minimalny (tak przypuszczam), ale jak już sobie postanowiłem, że robię wszystko w jaxie, to robię wszystko w jaxie
-# niech się Pan przygotuje na masę bezsensownych rozwiązań na maskach zamiast standardowego data slicingu, którego użylibyśmy w numpy, bo nie wymusza statycznych kształtów jak xla w funkcjach kompilowanych przez jaxa
+# 
 
 @jax.jit()
 def cost(dist: jnp.ndarray, route: jnp.ndarray):
@@ -21,11 +21,14 @@ def swap(key, route: jnp.ndarray):
 
 @jax.jit()
 def opt_reversal(key, route: jnp.ndarray):
-    i, j = jax.random.randint(key, 2, minval = 0, maxval = route.shape[0])
-    idx = jnp.arange(route.shape[0])
-    segment_idx = i + j - idx
-    new_route = jnp.where(jnp.greater_equal(idx, i) & jnp.less_equal(idx, j), route[segment_idx], route) # pierwsza przekombinowana implementacja na maskach
-    return new_route
+    key_i, key_len = jax.random.split(key)
+    i = jax.random.randint(key_i, (), minval = 0, maxval = route.shape[0] - 1)
+    length = jax.random.randint(key_len, (), minval = 2, maxval = route.shape[0] - i + 1)
+    j = i + length - 1
+    reversed_route = route[::-1]
+    map = jnp.arange(route.shape[0])
+    apply_mask = jnp.where(jnp.greater_equal(map, i) & jnp.less(map, j))
+    return jnp.where(apply_mask, reversed_route, route)
 
 @jax.jit()
 def insert_relocate(key, route: jnp.ndarray):
@@ -44,7 +47,7 @@ def block_move(key, route: jnp.ndarray):
     length = jax.random.randint(k_len, (), 1, route.shape[0])
     start = jax.random.randint(k_start, (), 0, route.shape[0] - length + 1)
 
-    
+
 
 def simulated_annealing(
         dist: jnp.ndarray,
