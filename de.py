@@ -44,7 +44,7 @@ def differential_evolution(
             # pool = jax.random.permutation(key, jnp.delete(jnp.arange(population_size), idx))[:3] # pierwsza wersja, logicznie spójna, ale niepotrzebnie skomplikowana dla xla (jax.jit)
             scores = jax.random.uniform(key, (population_size,))
             scores = scores.at[idx].set(jnp.inf)
-            pool = jnp.argsort(scores)[:3] # rozwiązanie v2, dziwne ale w teorii bardziej przyjazna dla xla
+            pool = jnp.argsort(scores)[:3] # rozwiązanie v2, dziwne ale w teorii bardziej przyjazna dla xla, bo nie modyfikuje kształtu 
             return population[pool]
         
         sampling_pools = get_sampling_pools(key_map, index_map)
