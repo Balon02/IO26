@@ -30,7 +30,7 @@ rastrigin_domain = (-5.12, 5.12)
 
 # https://www.sfu.ca/~ssurjano/langer.html
 @jax.jit()
-def langermann(
+def langermann( # bardzo ciekawy kształt w 2D dla podanych stałych; niestety losowe dobieranie tych stałych dla > 2 wymiarów skutkuje nierozwiązywalnym problemem
         xs: jnp.ndarray, 
         # pomijam tutaj argument m = 5 z oryginału, bo wydaje mi się, że służy tylko sprawdzeniu kształtu wektora c oraz pierwszego wymiaru macierzy A; zakładam, że w matlabowej wersji była to kwestia implementacyjna związana ze specyfiką języka, a nie istotna część funkcji
         c = jnp.array([1, 2, 5, 2, 3]),
@@ -50,3 +50,10 @@ def griewank(xs: jnp.ndarray):
     return sum - prod + 1
 
 griewank_domain = (-600.0, 600.0)
+
+# https://www.sfu.ca/~ssurjano/Code/rosenm.html
+@jax.jit()
+def rosenbrock(xs: jnp.ndarray):
+    return jnp.sum(100 * (xs[:-1] - xs[1:] ** 2) ** 2 + (xs[1:] - 1) ** 2)
+
+rosenbrock_domain = (-5.0, 10.0)
