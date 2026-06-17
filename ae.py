@@ -8,7 +8,7 @@ def evolutionary_algorithm(
         domain: Tuple[float, float],
         n_dim: int = 2,
         population_size: int = 100,
-        generations: int = 3000,
+        generations: int = 100,
         mutation_std: float = 0.05,
         parent_selection_pool_size: int = 5,
         seed: int = 123
