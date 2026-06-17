@@ -21,10 +21,9 @@ def swap(key, route: jnp.ndarray):
 
 @jax.jit()
 def opt_reversal(key, route: jnp.ndarray):
-    key_i, key_len = jax.random.split(key)
-    i = jax.random.randint(key_i, (), minval = 0, maxval = route.shape[0] - 1)
-    length = jax.random.randint(key_len, (), minval = 2, maxval = route.shape[0] - i + 1)
-    j = i + length - 1
+    pair = jax.random.choice(key, route.shape[0], shape = (2,), replace=False)
+    i = jnp.minimum(pair[0], pair[1])
+    j = jnp.maximum(pair[0], pair[1])
     reversed_route = route[::-1]
     map = jnp.arange(route.shape[0])
     apply_mask = jnp.where(jnp.greater_equal(map, i) & jnp.less(map, j))
