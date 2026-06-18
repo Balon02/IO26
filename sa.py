@@ -82,7 +82,11 @@ def simulated_annealing(
         "cost": init_cost,
         "best_route": init_route,
         "best_cost": init_cost,
-        "temperature": initial_temperature
+        "temperature": initial_temperature,
+        "operator_id": jnp.array(-1),
+        "accepted": jnp.array(False),
+        "candidate_cost": init_cost,
+        "cost_delta": jnp.array(0.0)
     }
 
     operators = [swap, opt_reversal, insert_relocate, block_move]
@@ -129,7 +133,11 @@ def simulated_annealing(
             "cost": cost,
             "best_route": best_route,
             "best_cost": best_cost,
-            "temperature": temperature
+            "temperature": temperature,
+            "operator_id": operator_id,
+            "accepted": accept,
+            "candidate_cost": candidate_cost,
+            "cost_delta": cost_delta
         }
 
         return state
@@ -138,6 +146,6 @@ def simulated_annealing(
     for i in range(iterations):
         state = step(state)
         results.append(state)
-        print(f'{state} @ {i} iter')
+        # print(f'{state} @ {i} iter')
 
     return results
