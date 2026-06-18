@@ -1,0 +1,34 @@
+Zadanie przygotowałem sam
+Jako, że robiłem wszystko w ramach jednego repo, stwierdziłem, że tutaj tak samo jak w 1 zadaniu użyję jaxa. Nie uważam, żeby to był dobry pomysł.
+Głównym ograniczeniem kodu kompilowanego przez xla (jax.jit) jest brak możliwości użycia dynamicznego data slicingu. To znaczy można ciąć arraye, jeżeli 
+z góry wiadomo jakie będą z nich kawałki, jeżeli natomiast losuje się punkt przecięcia, długość segmentu albo generalnie coś w tym stylu wewnątrz funkcji,
+to jest totalna kaplica i xla nie potrafi tego przetrawić. Operatory zmiany trasy polegają głównie na takich operacjach, więc oczywiście zamiast sobie
+darować i zrobić to wszystko w numpy, albo dalej używać jaxa tylko bez wrapowania kodu w dekorator @jax.jit uznałem, że potraktuję to jako wyzwanie
+i moje implementacje operatorów polegają w większości na funkcji roll. Z punktu widzenia problemu funkcja roll nie robi nic, bo droga jest cykliczna.
+Z punktu widzenia wcześniej opisanych ograniczeń xla, ta funkcja jest jedyną opcją rozwiązania, na którą wpadłem. Na przykład operator przeniesienia bloku
+kilkukrotnie używa funcji roll, żeby elementy wejściowej tablicy znalazły się na swoich docelowych pozycjach, 'przepisując' istotne fragmęty tych tablic,
+do rozwiązania. Efektem jest przekombinowany, ale dalej szybki kod. Tutaj również jedyna wprost użyta pętla przechodzi przez kolejne kroki, reszta rozwiązań
+jest wektorowa.
+
+Co do zasady działania na wysokim poziomie abstrakcji mamy klasycznie:
+
+SA:
+
+POCZĄTEK
+  Wygeneruj losowy stan początkowy
+  Oblicz jego koszt (odległość)
+  
+  DOPÓKI warunek_stopu NIE JEST spełniony WYKONUJ:
+    Zastosuj losowo wybrany operator
+    Oblicz koszt rezultatu
+    Oblicz deltę kosztu (koszt nowego - koszt starego rozwiązania)
+    Jeśli nowy stan jest lepszy (delta kosztu < 0 dla minimalizacji) Zaakceptuj nowy stan (ustaw jako obecny).
+    W przeciwnym wypadku zaakceptuj go z prawdopodobieństwem zależnym od temperatury (e^(-delta kosztu / temperatura))
+    Zaktualizuj najlepsze znalezione rozwiązanie
+    Obniż temperaturę
+  Koniec pętli
+KONIEC
+
+
+
+Warunkiem stopu jest z góry podana ilość iteracji.

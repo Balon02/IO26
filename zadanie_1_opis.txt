@@ -1,0 +1,50 @@
+Zadanie przygotowałem sam
+Generalnie sporo siedzę w trenowaniu sieci neuronowych i od jakiegoś czasu używam do tego ekosystemu bibliotek jax.
+Tutaj oczywiście żadnych gotowych rozwiązań nie stosowałem, więc jedyną zależnością jeżeli chodzi o backend jest sam jax.
+Rozwiązania wyglądają trochę jak pętla treningowa sieci neuronowej: ciało każdej iteracji jest wrapnięte dekoratorem @jax.jit,
+żeby zutylizować xla do przyspieszenia wykonywania kodu. W tym zadaniu wyszło to (moim zdaniem) całkiem naturalnie i nie 
+musiałem się jakoś bardziej gimnastykować niż musiałbym używając samego numpy. Wszystko co się dało jest zwektoryzowane, każda
+funkcja z sfu, każdy element wewnętrzny zarówno AE i DE. Jedyna wprost zbudowana przeze mnie pętla to pętla przechodząca przez wszystkie pokolenia,
+której nie da się uniknąć. Wewnętrzne elementy funkcji przepisywanych z matlabowych implementacji (jakoś tak mi łatwiej go zrozumieć niż R) które
+mają w środku pętle wykorzystujące wartość iteratora do obliczania rezultatu, a nie tylko liczenia obrotów pętli są rozwiązane za pomocą mapowania
+wartości iteratora z góry przez arange.
+
+Co do zasady działania na wysokim poziomie abstrakcji mamy klasycznie:
+
+AE:
+
+POCZĄTEK
+  Wygeneruj losową populację początkową
+  Oblicz funkcję przystosowania dla każdego osobnika
+  
+  DOPÓKI warunek_stopu NIE JEST spełniony WYKONUJ:
+    Wybierz rodziców (selekcja)
+    Stwórz potomstwo (krzyżowanie)
+    Wprowadź losowe zmiany (mutacja)
+    Oblicz funkcję przystosowania dla nowego potomstwa
+    Zbuduj nową populację (zastępowanie)
+    Zaktualizuj najlepsze znalezione rozwiązanie
+  Koniec pętli
+KONIEC
+
+
+
+DE:
+
+POCZĄTEK
+  Wygeneruj losową populację początkową
+  Oblicz funkcję przystosowania dla każdego osobnika
+  
+  DOPÓKI warunek_stopu NIE JEST spełniony WYKONUJ:
+    Wybierz po 3 inne osobniki dla każdego z populacji
+    Przeprowadź mutację: (osobnik_1 + F * (osobnik_2 - osobnik_3))
+    Przeprowadź krzyżowanie: wymieszaj cechy osobnika celu z mutantem, aby stworzyć wektor próbny
+    Oblicz funkcję przystosowania dla wektora próbnego
+    Przeprowadź selekcję: jeśli wektor próbny jest lepszy od osobnika celu, zastąp go w nowej generacji
+    Zaktualizuj najlepsze znalezione rozwiązanie
+  Koniec pętli
+KONIEC
+
+
+
+Warunkiem stopu jest z góry podana ilość iteracji.
