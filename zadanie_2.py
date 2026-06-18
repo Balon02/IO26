@@ -458,9 +458,7 @@ def build_report(
                     f"<section><h2>{html.escape(problem_name)}</h2>",
                     "<p>",
                     "Wykres trasy pokazuje aktualne rozwiązanie oraz najlepsze rozwiązanie "
-                    "znalezione do danej iteracji. Punkt startowy cyklu nie jest wyróżniany, "
-                    "ponieważ w TSP istotny jest kształt zamkniętej trasy, a nie miejsce "
-                    "rozpoczęcia zapisu permutacji.",
+                    "znalezione do danej iteracji. ",
                     "</p>",
                     summary_table(problem_name, coords, run),
                     "<h3>Symulacja krokowa trasy</h3>",
